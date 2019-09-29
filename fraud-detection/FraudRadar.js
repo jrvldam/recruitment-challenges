@@ -1,74 +1,115 @@
-const fs = require('fs')
+class FraudRadar {
+  constructor (normalize) {
+    this.normalize = normalize
+    this.ORDER_SIZE = 8
+    this.makeOrderFromLine = this.makeOrderFromLine.bind(this)
+  }
 
-function Check (filePath) {
-  // READ FRAUD LINES
-  let orders = []
-  let fraudResults = []
+  makeOrdersFromFileContent (fileContent) {
+    return fileContent.split('\n').map(this.makeOrderFromLine)
+  }
 
-  let fileContent = fs.readFileSync(filePath, 'utf8')
-  let lines = fileContent.split('\n')
-  for (let line of lines) {
-    let items = line.split(',')
-    let order = {
+  makeOrderFromLine (line) {
+    const items = line.split(',')
+
+    if (items.length !== this.ORDER_SIZE) {
+      throw new Error(`Insufficient items for an order. ${line}`)
+    }
+
+    return {
       orderId: Number(items[0]),
       dealId: Number(items[1]),
-      email: items[2].toLowerCase(),
-      street: items[3].toLowerCase(),
+      email: this.normalize.email(items[2]),
+      street: this.normalize.street(items[3]),
       city: items[4].toLowerCase(),
-      state: items[5].toLowerCase(),
+      state: this.normalize.state(items[5]),
       zipCode: items[6],
       creditCard: items[7]
     }
-    orders.push(order)
   }
 
-  // NORMALIZE
-  for (let order of orders) {
-    // Normalize email
-    let aux = order.email.split('@')
-    let atIndex = aux[0].indexOf('+')
-    aux[0] = atIndex < 0 ? aux[0].replace('.', '') : aux[0].replace('.', '').substring(0, atIndex - 1)
-    order.email = aux.join('@')
-
-    // Normalize street
-    order.street = order.street.replace('st.', 'street').replace('rd.', 'road')
-
-    // Normalize state
-    order.state = order.street.replace('il', 'illinois').replace('ca', 'california').replace('ny', 'new york')
-  }
-
-  // CHECK FRAUD
-  for (let i = 0; i < orders.length; i++) {
-    let current = orders[i]
+  checkFraudulentOrder (current, next) {
     let isFraudulent = false
 
-    for (let j = i + 1; j < orders.length; j++) {
-      isFraudulent = false
-      if (current.dealId === orders[j].dealId
-        && current.email === orders[j].email
-        && current.creditCard !== orders[j].creditCard) {
-          isFraudulent = true
-        }
-      
-      if (current.dealId === orders[j].dealId
-        && current.state === orders[j].state
-        && current.zipCode === orders[j].zipCode
-        && current.street === orders[j].street
-        && current.city === orders[j].city
-        && current.creditCard !== orders[j].creditCard) {
-          isFraudulent = true
-        }
-      
-      if (isFraudulent) {
-        fraudResults.push({
-          isFraudulent: true,
-          orderId: orders[j].orderId
-        })
+    if (current.dealId === next.dealId &&
+      current.email === next.email &&
+      current.creditCard !== next.creditCard) {
+      isFraudulent = true
+    }
+
+    if (current.dealId === next.dealId &&
+      current.state === next.state &&
+      current.zipCode === next.zipCode &&
+      current.street === next.street &&
+      current.city === next.city &&
+      current.creditCard !== next.creditCard) {
+      isFraudulent = true
+    }
+
+    if (isFraudulent) {
+      return {
+        isFraudulent: true,
+        orderId: next.orderId
       }
     }
   }
 
-  return fraudResults
+  check (fileContent) {
+    const orders = this.makeOrdersFromFileContent(fileContent)
+    const fraudResults = []
+
+    for (let i = 0, len = orders.length; i < len; i++) {
+      const current = orders[i]
+
+      for (let j = i + 1; j < len; j++) {
+        const fraudulentOrder = this.checkFraudulentOrder(current, orders[j])
+        if (fraudulentOrder) {
+          fraudResults.push(fraudulentOrder)
+        }
+      }
+    }
+
+    return fraudResults
+  }
 }
 
-module.exports = { Check }
+class Normalize {
+  constructor () {
+    this.emailRegex = (/^.{3,}@\w{2,}\.[a-z]{2,3}$/)
+    this.STATES = {
+      il: 'illinois',
+      ca: 'california',
+      ny: 'new york'
+    }
+  }
+
+  email (email) {
+    if (!this.emailRegex.test(email)) {
+      throw new Error(`Invalid email format. ${email}`)
+    }
+
+    let [name, domain] = email.toLowerCase().split('@')
+
+    name = name.replace('.', '')
+    const atIndex = name.indexOf('+')
+
+    if (atIndex !== -1) {
+      name = name.substring(0, atIndex)
+    }
+
+    return `${name}@${domain}`
+  }
+
+  street (street) {
+    return street
+      .toLowerCase()
+      .replace('st.', 'street')
+      .replace('rd.', 'road')
+  }
+
+  state (state) {
+    return this.STATES[state.toLowerCase()]
+  }
+}
+
+module.exports = { FraudRadar, Normalize }
