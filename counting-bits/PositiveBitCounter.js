@@ -3,17 +3,22 @@ function Count (input) {
     throw new RangeError('Only unsigned integers allowed')
   }
 
-  return input
-    .toString(2)
-    .split('')
-    .reverse()
-    .reduce((acc, val, index) => {
-      if (val === '1') {
-        acc[0]++
-        acc.push(index)
-      }
-      return acc
-    }, [0])
+  let counter = 0
+  let newPosition = 1
+  const response = [counter]
+
+  const bits = input.toString(2).split('')
+  const lastPosition = bits.length - 1
+
+  for (let i = lastPosition; i >= 0; --i) {
+    if (bits[i] === '1') {
+      counter++
+      response[newPosition++] = lastPosition - i
+    }
+  }
+  response[0] = counter
+
+  return response
 }
 
 module.exports = { Count }
