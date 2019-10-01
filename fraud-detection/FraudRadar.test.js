@@ -2,7 +2,8 @@ const path = require('path')
 const fs = require('fs')
 const util = require('util')
 const assert = require('assert')
-const { FraudRadar, Normalize } = require('./FraudRadar')
+const FraudRadar = require('./FraudRadar')
+const Normalize = require('./Normalize')
 
 const readFile = util.promisify(fs.readFile)
 
